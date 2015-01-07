@@ -2,7 +2,6 @@
 
 namespace JMS\TwigJsBundle\TwigJs\Compiler;
 
-use Symfony\Bundle\FrameworkBundle\Translation\Translator;
 use Symfony\Component\Translation\TranslatorInterface;
 use TwigJs\JsCompiler;
 use TwigJs\FilterCompilerInterface;
@@ -10,8 +9,6 @@ use TwigJs\FilterCompilerInterface;
 class TransFilterCompiler implements FilterCompilerInterface
 {
     private $translator;
-    private $loadCatalogueRef;
-    private $catalogueRef;
 
     public function __construct(TranslatorInterface $translator)
     {
@@ -25,16 +22,9 @@ class TransFilterCompiler implements FilterCompilerInterface
 
     public function compile(JsCompiler $compiler, \Twig_Node_Expression_Filter $node)
     {
-        if (!($locale = $compiler->getDefine('locale')) || !$this->translator instanceof Translator) {
+        if (!($locale = $compiler->getDefine('locale'))) {
             return false;
         }
-
-        // unfortunately, the Translation component does not provide a better
-        // way to retrieve these
-        $this->loadCatalogueRef = new \ReflectionMethod($this->translator, 'loadCatalogue');
-        $this->loadCatalogueRef->setAccessible(true);
-        $this->catalogueRef = new \ReflectionProperty($this->translator, 'catalogues');
-        $this->catalogueRef->setAccessible(true);
 
         // ignore dynamic messages, we cannot resolve these
         // users can still apply a runtime trans filter to do this
@@ -62,28 +52,20 @@ class TransFilterCompiler implements FilterCompilerInterface
             }
         }
 
-        $catalogue = $this->getCatalogue($locale);
+        $translated = $this->translator->trans($id, [], $domain, $locale);
 
         if (!$hasParams) {
-            $compiler->string($catalogue->get($id, $domain));
+            $compiler->string($translated);
 
             return;
         }
 
         $compiler
             ->raw('twig.filter.replace(')
-            ->string($catalogue->get($id, $domain))
+            ->string($translated)
             ->raw(", ")
             ->subcompile($arguments->getNode(0))
             ->raw(')')
         ;
-    }
-
-    private function getCatalogue($locale)
-    {
-        $this->loadCatalogueRef->invoke($this->translator, $locale);
-        $catalogues = $this->catalogueRef->getValue($this->translator);
-
-        return $catalogues[$locale];
     }
 }
